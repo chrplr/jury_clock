@@ -1,8 +1,8 @@
 #! /usr/bin/env python
-# Time-stamp: <2019-03-04 15:34:24 christophe@pallier.org>
+# Time-stamp: <2019-03-05 12:08:10 christophe@pallier.org>
 
 
-""" An application that shows the expected time of completion of a series of of evaluation.  """
+""" An application that shows the expected time of completion of a series of evaluation.  """
 
 import time
 import sys
@@ -25,55 +25,50 @@ def pretty_format_timestamp(timestamp):
     """ converts a timestamp (seconds elapsed since epoch) into a string HH:MM """
     return datetime.fromtimestamp(int(timestamp)).strftime("%H:%M")
 
-
 class Application(tk.Frame):
     def __init__(self, master=None):
         super(Application, self).__init__(master)
-        # super().__init__(master)
         self.pack()
-        #self.customFont = "-size 40"
-
-        self.customFont = font.Font(root, ("courier new", 40, "bold"))
-        self.create_widgets()
-
-    def create_widgets(self):
-
-        self.n = n_events
+        self.ntotal = n_events
         self.current = 1
         self.remaining = n_events - 1
         self.remaining_time = interval * n_events
-
         self.t0 = time.time()
         self.t1 = self.t0
-
-        self.w_clock = tk.Label(self, font=self.customFont)
-        self.w_clock["text"] = "Starting Time {}".format(pretty_format_timestamp(self.t0))
-        self.w_clock.pack()
-
-        self.w_current = tk.Label(self, font=self.customFont)
-        self.w_current["text"] = "Current {:d}/{:d} ({:d}) @ {}".format(self.current,
-                                                                        self.n,
-                                                                        self.remaining,
-                                                                        pretty_format_timestamp(self.t1))
-        self.w_current.pack(side="top")
-
+        self.target_interval = interval
         self.interval = interval
-        self.w_interval =  tk.Label(self, font=self.customFont)
-        self.w_interval["text"] = "---"
-        self.w_interval.pack(side="top")
-
         self.interval_avg = interval
         self.remaining_time_avg = self.remaining_time
+        self.pause_durations = 0  # not implemented yet TODO
+
+        self.customFont = font.Font(root, ("courier new", 40, "bold"))
+        self.create_widgets()
+        self.update()
+
+    def create_widgets(self):
+        self.w_current = tk.Label(self, font=self.customFont)
+        self.w_current.pack(side="top")
+
+        self.w_current_time = tk.Label(self, font=self.customFont)
+        self.w_current_time.pack(side='top')
+
+        self.w_start_clock = tk.Label(self, font=self.customFont)
+        self.w_start_clock.pack()
+
+        self.w_interval_target = tk.Label(self, font=self.customFont)
+        self.w_interval_target.pack()
+
+        self.w_interval =  tk.Label(self, font=self.customFont)
+        self.w_interval.pack(side="top")
+
         self.w_interval_avg = tk.Label(self, font=self.customFont)
-        self.w_interval_avg["text"] = "Average interval: {} ETA: {}".format(pretty_format_duration(self.interval_avg * 60),
-                                                                            pretty_format_duration(self.remaining_time_avg * 60))
         self.w_interval_avg.pack(side="top")
 
-        self.event = tk.Button(self, text="NEXT", fg="red", font=self.customFont, 
+        self.event = tk.Button(self, text="NEXT", fg="red", font=self.customFont,
                                command=self.inc)
         self.event.pack(side="top")
 
-        # self.pause = tk.Button(self, text="PAUSE", fg="red", font=self.customFont, 
+        # self.pause = tk.Button(self, text="PAUSE", fg="red", font=self.customFont,
         #                        command=self.pause)
         # self.pause.pack(side="top")
 
@@ -85,36 +80,39 @@ class Application(tk.Frame):
     def pause(self):
         None  # TODO
 
-    def inc(self):
+    def update(self):
+        self.w_current["text"] = "Current Project #{:d}/{:d} ({:d})".format(self.current,
+                                                                    self.ntotal,
+                                                                    self.remaining)
+        # update displayed time
+        self.w_current_time["text"] = "Project Start Time {} ({})".format(pretty_format_timestamp(self.t1),
+                                                                          pretty_format_duration(time.time() - self.t1))
+        # schedule timer to call myself after 1 second
 
+        self.w_start_clock["text"] = "Session Start Time {} ({})".format(pretty_format_timestamp(self.t0),
+                                                                         pretty_format_duration(time.time() - self.t0 - self.pause_durations))
+
+        self.w_interval_target["text"] = "Target interval={} ETA={} ({})".format(pretty_format_duration(self.target_interval * 60),
+                                                                                 pretty_format_timestamp(self.t1 + self.target_interval * (1 + self.remaining) * 60),
+                                                                                 pretty_format_duration(self.target_interval * (1 + self.remaining) * 60))
+
+        self.w_interval["text"] = "Last interval={} ETA={} ({})".format(pretty_format_duration(self.interval * 60),
+                                                                        pretty_format_timestamp(self.t1 + self.interval * (1 + self.remaining) * 60),
+                                                                        pretty_format_duration(self.interval * (1 + self.remaining) * 60))
+        self.w_interval_avg["text"] = " Avg interval={} ETA={} ({})".format(pretty_format_duration(self.interval_avg * 60),
+                                                                            pretty_format_timestamp(self.t1 + self.interval_avg * (1 + self.remaining) * 60),
+                                                                            pretty_format_duration(self.interval_avg * (1 + self.remaining) * 60))
+
+        self.after(1000, self.update)
+
+    def inc(self):
         prev_time = self.t1
         self.t1 = time.time()
-
         self.current += 1
-        self.remaining = self.n - self.current
-
+        self.remaining = self.ntotal - self.current
         self.interval = (self.t1 - prev_time) / 60
-        self.remaining_time = (self.interval * (1 + self.remaining))
-
         self.interval_avg = (self.t1 - self.t0) / (self.current - 1) / 60
-        self.remaining_time_avg = self.interval_avg * (1 + self.remaining)
-
-        if self.current <= self.n:
-            self.w_clock["text"] = "Start Time {} ({})".format(pretty_format_timestamp(self.t0),
-                                                               pretty_format_duration(self.t1 - self.t0))
-            self.w_current["text"] = "Current file {:d}/{:d} ({:d}) @ {}".format(self.current,
-                                                                                 self.n,
-                                                                                 self.remaining,
-                                                                                 pretty_format_timestamp(self.t1))
-            self.w_interval["text"] = "Last interval={} ETA={} ({})".format(pretty_format_duration(self.interval * 60),
-                                                                                   pretty_format_timestamp(self.t1 + self.remaining_time * 60),
-                                                                                   pretty_format_duration(self.remaining_time * 60))
-            self.w_interval_avg["text"] = " Avg interval={} ETA={} ({})".format(pretty_format_duration(self.interval_avg * 60),
-                                                                                        pretty_format_timestamp(self.t1 + self.remaining_time_avg * 60),
-                                                                                        pretty_format_duration(self.remaining_time_avg * 60))
-        else:
-            self.w_current["text"] = "{:d}/{:d}".format(self.n, self.n)
-            self.w_interval["text"] = "Finished in " + pretty_format_duration(self.t1 - self.t0)
+        self.update()
 
 
 if __name__ == '__main__':
